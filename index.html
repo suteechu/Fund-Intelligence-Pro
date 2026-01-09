@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fund Intelligence Dashboard Ultimate Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@300;400;500;700&display=swap');
+        body { font-family: 'Inter', 'Sarabun', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        input[type="range"] { height: 8px; -webkit-appearance: none; background: #e2e8f0; border-radius: 10px; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; background: #4f46e5; border-radius: 50%; cursor: pointer; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        .heatmap-cell { transition: all 0.2s; position: relative; cursor: default; }
+        .heatmap-cell:hover::after { content: attr(data-val); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 4px 8px; border-radius: 6px; font-size: 10px; white-space: nowrap; z-index: 20; }
+        
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; padding: 0; }
+            .print-container { width: 100%; max-width: 100%; border: none; shadow: none; }
+            .chart-container { height: 250px !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 selection:bg-indigo-100">
+
+    <div id="app" class="min-h-screen p-3 md:p-6 print-container">
+        <!-- Header -->
+        <header class="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
+            <div class="flex flex-col items-center md:items-start text-center md:text-left">
+                <h1 class="text-2xl font-extrabold text-slate-900 flex items-center gap-2">
+                    <div class="p-2 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-200 text-white">
+                        <i data-lucide="shield-check" size="24"></i>
+                    </div>
+                    <span>Fund Intelligence <span class="text-indigo-600">Pro</span></span>
+                </h1>
+                <div class="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-2 text-slate-500 text-[11px]">
+                    <div class="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded-full shadow-sm">
+                        <span id="sync-status" class="w-2 h-2 bg-slate-400 rounded-full"></span>
+                        <span id="user-info" class="font-bold uppercase tracking-tighter">Status: Initializing</span>
+                    </div>
+                    <span id="storage-mode-badge" class="bg-slate-200 text-slate-700 px-2 py-1 rounded-full font-black tracking-widest uppercase">OFFLINE</span>
+                    <div id="data-count" class="bg-indigo-600 text-white px-2 py-1 rounded-full font-black tracking-widest">0 RECORDS</div>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center justify-center gap-2">
+                <button onclick="window.toggleAISection()" class="bg-indigo-50 text-indigo-700 border border-indigo-100 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-100 transition-all active:scale-95 shadow-sm">
+                    <i data-lucide="sparkles" size="16"></i> AI Advisor
+                </button>
+                <button onclick="window.print()" class="bg-white text-slate-700 border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-50 transition-all active:scale-95 shadow-sm">
+                    <i data-lucide="printer" size="16"></i> Print
+                </button>
+                <button onclick="window.openModal()" class="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-black transition-all shadow-md active:scale-95">
+                    <i data-lucide="layers" size="16"></i> Database
+                </button>
+            </div>
+        </header>
+
+        <!-- AI Advisor -->
+        <div id="ai-advisor-container" class="max-w-7xl mx-auto mb-6 animate-fade-in hidden no-print">
+            <div class="bg-slate-900 rounded-2xl p-5 md:p-6 text-white relative shadow-xl border border-white/5">
+                <button onclick="window.toggleAISection()" class="absolute top-4 right-4 p-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white/50">
+                    <i data-lucide="x" size="16"></i>
+                </button>
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div>
+                        <h3 class="text-xl font-black flex items-center gap-3">
+                            <i data-lucide="bot" class="text-indigo-400"></i> AI Health Check
+                        </h3>
+                        <p class="text-slate-400 text-sm">วิเคราะห์เจาะลึกสุขภาพพอร์ตด้วย AI (Gemini 2.5)</p>
+                    </div>
+                    <button id="ai-btn" onclick="window.generateAIInsight()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-indigo-900/50">
+                        <i data-lucide="zap" size="18"></i> ANALYZE
+                    </button>
+                </div>
+                <div id="ai-content-box" class="mt-4 bg-white/5 rounded-xl p-4 md:p-5 border border-white/10 overflow-x-hidden">
+                    <div id="ai-content" class="text-slate-200 leading-relaxed text-sm opacity-90 italic">รอข้อมูลเพื่อเริ่มการวิเคราะห์...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Retirement Simulation Section -->
+        <div class="max-w-7xl mx-auto mb-6 hidden animate-fade-in" id="goal-planner-section">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+                    
+                    <div class="p-4 flex items-center gap-4 bg-slate-50/30">
+                        <div class="relative w-16 h-16 flex-shrink-0">
+                            <svg class="w-full h-full transform -rotate-90">
+                                <circle cx="32" cy="32" r="28" stroke="currentColor" stroke-width="5" fill="transparent" class="text-slate-100" />
+                                <circle cx="32" cy="32" r="28" stroke="currentColor" stroke-width="5" fill="transparent" stroke-dasharray="175.84" id="goal-circle" class="text-indigo-600 transition-all duration-1000 ease-out" />
+                            </svg>
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <span class="text-[10px] font-black text-slate-900" id="goal-pct">0%</span>
+                            </div>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest">ความคืบหน้า</p>
+                            <h3 class="text-sm font-black text-slate-900 leading-tight" id="goal-target-label">฿5.0M</h3>
+                            <button onclick="window.setGoal()" class="text-[10px] font-bold text-indigo-500 hover:underline no-print">แก้ไขเป้าหมาย</button>
+                        </div>
+                    </div>
+
+                    <div class="p-4 lg:col-span-2 space-y-4 no-print">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="space-y-1">
+                                <div class="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase">
+                                    <span>ปีที่เหลือ</span>
+                                    <span class="text-indigo-600 bg-indigo-50 px-2 rounded font-bold" id="retire-years-val">20</span>
+                                </div>
+                                <input type="range" id="retire-years-slider" min="1" max="40" value="20" oninput="window.updateSimulation()" class="w-full">
+                            </div>
+                            <div class="space-y-1">
+                                <div class="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase">
+                                    <span>ROI คาดหวัง</span>
+                                    <span class="text-emerald-600 bg-emerald-50 px-2 rounded font-bold" id="roi-val">5%</span>
+                                </div>
+                                <input type="range" id="roi-slider" min="1" max="15" value="5" oninput="window.updateSimulation()" class="w-full">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-0.5">
+                                <label class="text-[9px] font-black text-slate-400 uppercase">เงินเดือน</label>
+                                <input type="number" id="salary-val" value="30000" onchange="window.updateSimulation()" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:border-indigo-500">
+                            </div>
+                            <div class="space-y-0.5">
+                                <label class="text-[9px] font-black text-slate-400 uppercase">ออม (%)</label>
+                                <input type="number" id="contribution-pct-val" value="15" onchange="window.updateSimulation()" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:border-indigo-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 flex flex-col justify-center bg-indigo-50/20">
+                        <div class="space-y-1.5">
+                            <div class="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase">
+                                <span>อีก 3 ปี</span>
+                                <span class="text-[11px] font-bold" id="forecast-3y">฿0</span>
+                            </div>
+                            <div class="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase">
+                                <span>อีก 5 ปี</span>
+                                <span class="text-[11px] font-bold" id="forecast-5y">฿0</span>
+                            </div>
+                            <div class="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase">
+                                <span>อีก 10 ปี</span>
+                                <span class="text-[11px] font-bold" id="forecast-10y">฿0</span>
+                            </div>
+                            <div class="pt-2 border-t border-indigo-100 flex flex-col items-end">
+                                <div class="flex justify-between w-full items-end">
+                                    <span class="text-[8px] font-black text-indigo-600 uppercase tracking-tighter">ยอดเมื่อเกษียณ</span>
+                                    <h4 class="text-sm font-black text-indigo-600 leading-none" id="forecast-retire">฿0</h4>
+                                </div>
+                                <p id="retire-summary-text" class="text-[9px] font-bold text-amber-500 mt-1 italic text-right">พร้อมวิเคราะห์</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Content -->
+        <div class="max-w-7xl mx-auto space-y-4">
+            
+            <!-- Top Stats & Proportion Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                <div class="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4" id="stats-grid"></div>
+                
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <i data-lucide="pie-chart" size="12" class="text-rose-500"></i> สัดส่วนพอร์ต
+                        </h3>
+                    </div>
+                    <div class="flex items-center justify-between lg:justify-center gap-4">
+                        <div class="w-16 h-16 relative flex-shrink-0">
+                            <canvas id="pieChart"></canvas>
+                        </div>
+                        <div id="pie-details" class="flex-1 lg:flex-none space-y-1.5 text-[9px]"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Yearly Growth Summary (Compact Row) -->
+            <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+                <div class="flex items-center justify-between mb-2.5">
+                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <i data-lucide="calendar-days" size="12" class="text-amber-500"></i> ผลตอบแทนรายปี
+                    </h3>
+                </div>
+                <div id="yearly-grid" class="flex gap-2.5 overflow-x-auto pb-1.5 custom-scrollbar no-scrollbar"></div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div class="lg:col-span-2 bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <h3 class="text-sm font-black text-slate-900 flex items-center gap-2"><i data-lucide="area-chart" size="16" class="text-indigo-600"></i> แนวโน้มการเติบโต</h3>
+                        <div class="flex gap-1 bg-slate-100 p-1 rounded-xl self-start sm:self-auto no-print">
+                            <button onclick="window.setTimeFilter('1Y')" id="filter-1Y" class="px-3 py-1.5 rounded-lg text-[10px] font-black transition-all">1Y</button>
+                            <button onclick="window.setTimeFilter('ALL')" id="filter-ALL" class="px-3 py-1.5 rounded-lg text-[10px] font-black transition-all bg-white shadow-sm text-indigo-600">ALL</button>
+                        </div>
+                    </div>
+                    <div class="chart-container"><canvas id="growthChart"></canvas></div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 class="text-sm font-black mb-6 flex items-center gap-2"><i data-lucide="bar-chart-3" size="16" class="text-emerald-500"></i> กำไร/ขาดทุน รายเดือน</h3>
+                    <div class="chart-container"><canvas id="monthlyPerfChart"></canvas></div>
+                </div>
+            </div>
+
+            <!-- Heatmap Section -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                <h3 class="text-sm font-black mb-4 flex items-center gap-2"><i data-lucide="grid" size="16" class="text-indigo-500"></i> Monthly Profit Heatmap (฿)</h3>
+                <div class="overflow-x-auto custom-scrollbar no-scrollbar">
+                    <div id="heatmap-container" class="min-w-[800px]"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Modal -->
+    <div id="data-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-fade-in">
+            <div class="p-6 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+                <h2 class="text-xl font-black text-slate-900">ฐานข้อมูล</h2>
+                <button onclick="window.closeModal()" class="p-2 bg-slate-50 rounded-xl text-slate-400 active:scale-90"><i data-lucide="x" size="20"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
+                <div class="flex items-center gap-2 mb-6 bg-slate-100 p-1.5 rounded-2xl w-fit">
+                    <button onclick="window.switchStorageMode('local')" id="mode-local-btn" class="px-5 py-2 rounded-xl text-[10px] font-black bg-white shadow-sm uppercase">LOCAL</button>
+                    <button onclick="window.switchStorageMode('cloud')" id="mode-cloud-btn" class="px-5 py-2 rounded-xl text-[10px] font-black bg-white shadow-sm uppercase">CLOUD</button>
+                </div>
+                <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-6">
+                    <button onclick="window.toggleForm()" class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-indigo-100"><i data-lucide="plus" size="14"></i> บันทึก</button>
+                    <button onclick="window.togglePasteArea()" class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-emerald-100"><i data-lucide="clipboard" size="14"></i> Paste</button>
+                    <button onclick="document.getElementById('file-input').click()" class="bg-white text-emerald-700 border border-emerald-200 px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 active:scale-95"><i data-lucide="file-up" size="14"></i> File</button>
+                    <button onclick="window.confirmClearAll()" class="bg-rose-50 text-rose-700 border border-rose-200 px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 active:scale-95"><i data-lucide="trash-2" size="14"></i> ล้าง</button>
+                    <input type="file" id="file-input" class="hidden" accept=".csv, .xlsx, .xls" onchange="window.handleFileUpload(event)">
+                </div>
+                
+                <!-- Paste Area -->
+                <div id="paste-area" class="hidden bg-emerald-50 p-5 rounded-2xl border border-emerald-200 mb-8 animate-fade-in">
+                    <div class="font-black border-b border-emerald-100 pb-2 text-xs text-emerald-800 mb-4 flex justify-between items-center">
+                        <span>Bulk Paste Data</span>
+                        <button onclick="window.togglePasteArea()" class="text-emerald-400"><i data-lucide="x" size="16"></i></button>
+                    </div>
+                    <textarea id="paste-input" placeholder="วางข้อมูลจากตารางที่นี่..." class="w-full h-32 p-4 border border-emerald-200 rounded-2xl text-[11px] font-mono outline-none focus:border-emerald-500 custom-scrollbar mb-4 bg-white" spellcheck="false"></textarea>
+                    <div class="flex justify-end">
+                        <button onclick="window.processBulkPaste()" class="bg-emerald-600 text-white px-6 py-3 rounded-xl text-xs font-bold active:scale-95 shadow-lg">ประมวลผลข้อมูล</button>
+                    </div>
+                </div>
+
+                <form id="data-form" class="hidden bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-8 space-y-4 animate-fade-in">
+                    <div class="font-black border-b pb-2 text-xs text-slate-800 flex justify-between items-center">
+                        <span id="form-title">บันทึกข้อมูลกองทุน</span>
+                        <input type="hidden" id="f-id">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="space-y-1"><label class="text-[9px] font-black text-slate-400 uppercase">วันที่ (DD.MM.YYYY)</label><input required id="f-date" type="text" placeholder="30.11.2024" class="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500"></div>
+                        <div class="space-y-1"><label class="text-[9px] font-black text-slate-400 uppercase">เงินสะสมพนักงาน</label><input required id="f-empAccum" type="number" step="0.01" class="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold outline-none"></div>
+                        <div class="space-y-1"><label class="text-[9px] font-black text-slate-400 uppercase">กำไรพนักงาน</label><input required id="f-empReturn" type="number" step="0.01" class="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold outline-none"></div>
+                        <div class="space-y-1"><label class="text-[9px] font-black text-slate-400 uppercase">เงินสมทบนายจ้าง</label><input required id="f-employerAccum" type="number" step="0.01" class="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold outline-none"></div>
+                        <div class="space-y-1"><label class="text-[9px] font-black text-slate-400 uppercase">กำไรนายจ้าง</label><input required id="f-employerReturn" type="number" step="0.01" class="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold outline-none"></div>
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" class="flex-1 bg-slate-900 text-white py-3 rounded-2xl text-xs font-bold active:scale-95 shadow-md">บันทึก</button>
+                        <button type="button" onclick="window.toggleForm()" class="px-6 py-3 bg-slate-200 rounded-2xl text-xs font-bold active:scale-95">ยกเลิก</button>
+                    </div>
+                </form>
+
+                <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden overflow-x-auto no-scrollbar">
+                    <table class="w-full text-xs min-w-[500px]">
+                        <thead class="bg-slate-50 border-b">
+                            <tr>
+                                <th class="p-4 text-left font-black text-slate-500 uppercase text-[9px]">งวดวันที่</th>
+                                <th class="p-4 text-right font-black text-slate-500 uppercase text-[9px]">พนักงาน</th>
+                                <th class="p-4 text-right font-black text-slate-500 uppercase text-[9px]">นายจ้าง</th>
+                                <th class="p-4 text-right font-black text-slate-500 uppercase text-[9px]">รวมสุทธิ</th>
+                                <th class="p-4 text-center font-black text-slate-500 uppercase text-[9px]"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="data-table-body" class="divide-y divide-slate-50"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-3xl p-8 max-sm w-full text-center shadow-2xl animate-fade-in">
+            <i data-lucide="alert-triangle" size="48" class="text-rose-500 mx-auto mb-4"></i>
+            <h3 class="text-xl font-black text-slate-900 mb-2">ล้างข้อมูลทั้งหมด?</h3>
+            <p class="text-slate-500 text-xs mb-8 leading-relaxed">ข้อมูลในโหมด <span id="confirm-mode-name" class="font-bold text-indigo-600">LOCAL</span> จะถูกลบถาวร ไม่สามารถกู้คืนได้</p>
+            <div class="flex gap-3">
+                <button onclick="window.executeClearAll()" class="flex-1 bg-rose-600 text-white py-3.5 rounded-2xl font-black text-sm active:scale-95 shadow-lg shadow-rose-100">ลบทันที</button>
+                <button onclick="window.closeConfirmModal()" class="flex-1 bg-slate-100 text-slate-600 py-3.5 rounded-2xl font-black text-sm active:scale-95">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Alert -->
+    <div id="custom-alert" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] hidden no-print w-[90%] max-w-xs">
+        <div class="bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10 animate-fade-in justify-center">
+            <span id="alert-text" class="font-bold text-[11px] text-center"></span>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, deleteDoc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Config & Auth Check ---
+        const config = (() => { 
+            try { 
+                return typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null; 
+            } catch (e) { return null; } 
+        })();
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'fund-track-v9';
+        const apiKey = ""; 
+
+        // --- State ---
+        let db, auth, user = null;
+        let fullData = [], filteredData = [], currentFilter = 'ALL';
+        let growthChart, pieChart, monthlyPerfChart;
+        let investmentGoal = parseFloat(localStorage.getItem('fund_investment_goal')) || 5000000;
+        let storageMode = localStorage.getItem('fund_storage_mode') || 'local';
+
+        // --- Core Functions Exposed to Window ---
+        window.setGoal = () => { 
+            const n = prompt("ระบุยอดเป้าหมายเงินออมที่คุณต้องการ (บาท):", investmentGoal); 
+            if (n !== null) {
+                const cleaned = n.replace(/,/g, '').trim();
+                const val = parseFloat(cleaned);
+                if (!isNaN(val) && val > 0) {
+                    investmentGoal = val;
+                    localStorage.setItem('fund_investment_goal', val);
+                    window.updateSimulation();
+                    showAlert("ปรับปรุงเป้าหมายสำเร็จ");
+                } else if (cleaned !== "") {
+                    showAlert("กรุณาระบุตัวเลขที่ถูกต้อง");
+                }
+            }
+        };
+
+        window.toggleAISection = () => { const el = document.getElementById('ai-advisor-container'); if(el) el.classList.toggle('hidden'); };
+        window.openModal = () => { const el = document.getElementById('data-modal'); if(el) el.classList.remove('hidden'); };
+        window.closeModal = () => { const el = document.getElementById('data-modal'); if(el) el.classList.add('hidden'); resetForm(); };
+        window.toggleForm = () => { const el = document.getElementById('data-form'); if(el) el.classList.toggle('hidden'); };
+        window.togglePasteArea = () => { const el = document.getElementById('paste-area'); if(el) el.classList.toggle('hidden'); };
+        window.confirmClearAll = () => { const modal = document.getElementById('confirm-modal'); if(modal) modal.classList.remove('hidden'); };
+        window.closeConfirmModal = () => { const modal = document.getElementById('confirm-modal'); if(modal) modal.classList.add('hidden'); };
+        
+        const initApp = async () => {
+            updateModeUI();
+            if (storageMode === 'cloud' && (!config || !config.apiKey)) { switchStorageMode('local'); return; }
+            if (storageMode === 'local') { loadLocalData(); renderDashboard(); return; }
+            try {
+                const app = initializeApp(config); auth = getAuth(app); db = getFirestore(app);
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+                else await signInAnonymously(auth);
+                onAuthStateChanged(auth, u => { 
+                    user = u; 
+                    if (u) { 
+                        const statusDot = document.getElementById('sync-status');
+                        const userInfo = document.getElementById('user-info');
+                        if(statusDot) statusDot.className = 'w-2 h-2 bg-emerald-500 rounded-full animate-pulse'; 
+                        if(userInfo) userInfo.innerText = `CLOUD SYNC | ${u.uid.slice(0, 6)}`; 
+                        setupDataListener(); 
+                    } 
+                });
+            } catch (err) { switchStorageMode('local'); }
+        };
+
+        const updateModeUI = () => {
+            const isCloud = storageMode === 'cloud';
+            const badge = document.getElementById('storage-mode-badge');
+            const localBtn = document.getElementById('mode-local-btn');
+            const cloudBtn = document.getElementById('mode-cloud-btn');
+            if(badge) badge.innerText = isCloud ? 'ONLINE' : 'OFFLINE';
+            if(localBtn) localBtn.className = isCloud ? 'px-5 py-2 rounded-xl text-[10px] font-black bg-white shadow-sm uppercase' : 'px-5 py-2 rounded-xl text-[10px] font-black bg-indigo-600 text-white uppercase';
+            if(cloudBtn) cloudBtn.className = isCloud ? 'px-5 py-2 rounded-xl text-[10px] font-black bg-indigo-600 text-white uppercase' : 'px-5 py-2 rounded-xl text-[10px] font-black bg-white shadow-sm uppercase';
+        };
+
+        window.switchStorageMode = mode => { localStorage.setItem('fund_storage_mode', mode); location.reload(); };
+        const loadLocalData = () => { const saved = localStorage.getItem('fund_data_local'); fullData = saved ? JSON.parse(saved) : []; syncDataState(); };
+        const saveLocalData = () => { localStorage.setItem('fund_data_local', JSON.stringify(fullData)); };
+        const setupDataListener = () => { if (!user || !db || storageMode !== 'cloud') return; onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'fundEntries'), snap => { fullData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); syncDataState(); }, err => console.error("Firestore Error:", err)); };
+
+        const syncDataState = () => { 
+            fullData.sort((a, b) => (a.date.split('.').reverse().join('-')).localeCompare(b.date.split('.').reverse().join('-'))); 
+            applyFilter(); 
+        };
+        
+        const parseVal = v => { 
+            if (v === null || v === undefined) return 0; 
+            if (typeof v === 'number') return v; 
+            let cleaned = v.toString().replace(/["\s,]/g, '').trim();
+            let n = parseFloat(cleaned); 
+            return isNaN(n) ? 0 : n; 
+        };
+        
+        const formatCurrency = v => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 0 }).format(v);
+
+        const applyFilter = () => { filteredData = currentFilter === '1Y' ? fullData.slice(-12) : [...fullData]; renderDashboard(); };
+        window.setTimeFilter = f => { currentFilter = f; ['1Y', 'ALL'].forEach(id => { const el = document.getElementById(`filter-${id}`); if(el) el.className = (id === f) ? "px-3 py-1.5 rounded-lg text-[10px] font-black bg-white shadow-sm text-indigo-600" : "px-3 py-1.5 rounded-lg text-[10px] font-black text-slate-500"; }); applyFilter(); };
+
+        window.renderDashboard = () => {
+            const countEl = document.getElementById('data-count');
+            if(countEl) countEl.innerText = `${fullData.length} RECORDS`;
+            
+            if (fullData.length === 0) {
+                const grid = document.getElementById('stats-grid');
+                if(grid) grid.innerHTML = `<div class="col-span-full py-12 text-center bg-white rounded-2xl border border-dashed text-slate-300 font-bold">ไม่มีข้อมูล</div>`;
+                const tbody = document.getElementById('data-table-body');
+                if(tbody) tbody.innerHTML = "";
+                const heatmap = document.getElementById('heatmap-container');
+                if(heatmap) heatmap.innerHTML = "";
+                const yearly = document.getElementById('yearly-grid');
+                if(yearly) yearly.innerHTML = "";
+                if(growthChart) growthChart.destroy();
+                if(monthlyPerfChart) monthlyPerfChart.destroy();
+                if(pieChart) pieChart.destroy();
+                return;
+            }
+            
+            const latest = fullData[fullData.length - 1], prev = fullData[fullData.length - 2] || latest;
+            const totalVal = parseVal(latest.total), totalRet = parseVal(latest.empReturn) + parseVal(latest.employerReturn), totalPrin = parseVal(latest.empAccum) + parseVal(latest.employerAccum);
+            const moM = totalVal - parseVal(prev.total);
+
+            let maxDrawdown = 0, peak = 0;
+            const monthlyReturns = [];
+            fullData.forEach((d, i) => {
+                const val = parseVal(d.total); if (val > peak) peak = val;
+                const dd = peak === 0 ? 0 : (peak - val) / peak; if (dd > maxDrawdown) maxDrawdown = dd;
+                if (i > 0) { 
+                    const prevVal = parseVal(fullData[i-1].total); 
+                    const diffPrin = (parseVal(d.empAccum) + parseVal(d.employerAccum)) - (parseVal(fullData[i-1].empAccum) + parseVal(fullData[i-1].employerAccum)); 
+                    monthlyReturns.push(val - prevVal - diffPrin); 
+                }
+            });
+
+            const mean = monthlyReturns.length > 0 ? (monthlyReturns.reduce((a, b) => a + b, 0) / monthlyReturns.length) : 0;
+            const stdDev = monthlyReturns.length > 0 ? Math.sqrt(monthlyReturns.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b, 0) / monthlyReturns.length) : 0;
+            const sharpe = stdDev === 0 ? 0 : mean / stdDev;
+
+            window.updateSimulation();
+
+            const grid = document.getElementById('stats-grid');
+            if(grid) {
+                grid.innerHTML = `
+                    ${createStatCard('Portfolio Value', formatCurrency(totalVal), `ROI: ${((totalRet/totalPrin)*100).toFixed(1)}%`, 'wallet', 'indigo')}
+                    ${createStatCard('Total Profit', formatCurrency(totalRet), `MoM: ${formatCurrency(moM)}`, 'trending-up', 'emerald', moM >= 0)}
+                    ${createStatCard('Risk (Sharpe)', sharpe.toFixed(2), `Efficiency`, 'activity', 'amber', sharpe > 1)}
+                    ${createStatCard('Max Drawdown', (maxDrawdown * 100).toFixed(1) + '%', 'Max drop', 'shield-alert', 'rose', maxDrawdown < 0.05)}
+                `;
+            }
+
+            updateCharts(monthlyReturns);
+            renderYearly();
+            renderHeatmap(fullData);
+            
+            const tbody = document.getElementById('data-table-body');
+            if(tbody) {
+                tbody.innerHTML = [...fullData].reverse().map(item => `
+                    <tr class="hover:bg-slate-50 border-b border-slate-50">
+                        <td class="p-4 font-bold text-[10px]">${item.date}</td>
+                        <td class="p-4 text-right text-[10px]">${formatCurrency(parseVal(item.empAccum) + parseVal(item.empReturn))}</td>
+                        <td class="p-4 text-right text-[10px]">${formatCurrency(parseVal(item.employerAccum) + parseVal(item.employerReturn))}</td>
+                        <td class="p-4 text-right font-black text-indigo-600 text-[10px]">${formatCurrency(parseVal(item.total))}</td>
+                        <td class="p-4 text-center">
+                            <div class="flex items-center justify-center gap-2">
+                                <button onclick="window.editEntry('${item.id}')" class="p-2 text-slate-400 hover:text-indigo-600 active:scale-90"><i data-lucide="edit-3" size="14"></i></button>
+                                <button onclick="window.deleteEntry('${item.id}')" class="p-2 text-slate-400 hover:text-rose-500 active:scale-90"><i data-lucide="trash-2" size="14"></i></button>
+                            </div>
+                        </td>
+                    </tr>`).join('');
+            }
+            
+            const empShare = parseVal(latest.empAccum) + parseVal(latest.empReturn), emrShare = parseVal(latest.employerAccum) + parseVal(latest.employerReturn);
+            const pieDetails = document.getElementById('pie-details');
+            if(pieDetails) {
+                pieDetails.innerHTML = `
+                    <div class="flex justify-between items-center px-3 py-1.5 bg-indigo-50/60 rounded-xl text-indigo-700 font-bold min-w-[100px]"><span>พนักงาน</span><span>${((empShare/totalVal)*100).toFixed(1)}%</span></div>
+                    <div class="flex justify-between items-center px-3 py-1.5 bg-rose-50/60 rounded-xl text-rose-700 font-bold min-w-[100px]"><span>นายจ้าง</span><span>${((emrShare/totalVal)*100).toFixed(1)}%</span></div>`;
+            }
+            
+            lucide.createIcons();
+        };
+
+        window.updateSimulation = () => {
+            if (fullData.length === 0) return;
+            const cur = parseVal(fullData[fullData.length-1].total);
+            const years = parseInt(document.getElementById('retire-years-slider').value);
+            const roi = parseFloat(document.getElementById('roi-slider').value);
+            const sal = parseFloat(document.getElementById('salary-val').value) || 0;
+            const conP = parseFloat(document.getElementById('contribution-pct-val').value) || 0;
+            const mAdd = sal * (conP / 100);
+
+            const safeSetText = (id, text) => { const el = document.getElementById(id); if(el) el.innerText = text; };
+            safeSetText('retire-years-val', years);
+            safeSetText('roi-val', roi + '%');
+            const planner = document.getElementById('goal-planner-section');
+            if(planner) planner.classList.remove('hidden');
+
+            const pctG = Math.min(100, Math.max(0, (cur / investmentGoal) * 100));
+            safeSetText('goal-pct', `${pctG.toFixed(1)}%`);
+            safeSetText('goal-target-label', '฿' + (investmentGoal / 1000000).toFixed(1) + 'M');
+            const circle = document.getElementById('goal-circle');
+            if(circle) circle.style.strokeDashoffset = 219.9 - (pctG / 100) * 219.9;
+
+            const calcFV = (y, r) => { let fv = cur; for(let m=1; m<=y*12; m++) fv = (fv + mAdd) * (1 + (r/100)/12); return fv; };
+            safeSetText('forecast-3y', formatCurrency(calcFV(3, roi)));
+            safeSetText('forecast-5y', formatCurrency(calcFV(5, roi)));
+            safeSetText('forecast-10y', formatCurrency(calcFV(10, roi)));
+            safeSetText('forecast-retire', formatCurrency(calcFV(years, roi)));
+            
+            const vRet = calcFV(years, roi);
+            const stat = document.getElementById('retire-summary-text');
+            if(stat) {
+                stat.innerText = vRet >= investmentGoal ? "เป้าหมายสำเร็จแล้ว!" : `ยอดที่ยังขาดอีก ${formatCurrency(investmentGoal - vRet)}`;
+                stat.className = `text-[10px] font-bold mt-2 italic text-right ${vRet >= investmentGoal ? 'text-emerald-500' : 'text-amber-500'}`;
+            }
+        };
+
+        window.generateAIInsight = async () => {
+            if (fullData.length === 0) return;
+            const btn = document.getElementById('ai-btn'), content = document.getElementById('ai-content'), latest = fullData[fullData.length-1];
+            if(!btn || !content) return;
+            btn.disabled = true; btn.innerText = "...";
+            const prompt = `วิเคราะห์พอร์ต PVD ยอด ${formatCurrency(latest.total)} บาท, กำไรสะสม ${formatCurrency(parseVal(latest.empReturn)+parseVal(latest.employerReturn))} บาท. ช่วยวิเคราะห์ความเสี่ยงและสุขภาพพอร์ตเป็นภาษาไทย 3 ข้อ`;
+            const callWithRetry = async (retries = 5, delay = 1000) => {
+                try {
+                    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+                    if (!resp.ok) throw new Error('API Error');
+                    const res = await resp.json(); content.innerText = res.candidates?.[0]?.content?.parts?.[0]?.text || "AI Error"; content.classList.remove('opacity-90', 'italic');
+                } catch (err) {
+                    if (retries > 0) { await new Promise(r => setTimeout(r, delay)); return callWithRetry(retries - 1, delay * 2); }
+                    content.innerText = "Connection failed.";
+                } finally { btn.disabled = false; btn.innerText = "ANALYZE"; }
+            };
+            callWithRetry();
+        };
+
+        const formatFileDate = d => { 
+            if (!d) return ""; 
+            if (d instanceof Date) return `${d.getDate().toString().padStart(2,'0')}.${(d.getMonth()+1).toString().padStart(2,'0')}.${d.getFullYear()}`; 
+            let s = d.toString().trim(); 
+            if (s.includes('/')) return s.split('/').map(p => p.padStart(2,'0')).join('.'); 
+            return s; 
+        };
+
+        const isDatePattern = s => {
+            if (s instanceof Date) return true;
+            if (!s) return false;
+            return /^\d{1,2}[\.\/]\d{1,2}[\.\/]\d{4}/.test(s.toString());
+        };
+
+        window.processBulkPaste = async () => {
+            const input = document.getElementById('paste-input').value;
+            if (!input.trim()) return;
+            showAlert("กำลังประมวลผล...");
+            const lines = input.split(/\r?\n/);
+            let addedCount = 0; let duplicateCount = 0;
+            const existingDates = new Set(fullData.map(d => d.date));
+            for (const line of lines) {
+                if (!line.trim()) continue;
+                const dateMatch = line.match(/(\d{1,2}[\.\/]\d{1,2}[\.\/]\d{4})/);
+                if (!dateMatch) continue;
+                const date = formatFileDate(dateMatch[0]);
+                if (existingDates.has(date)) { duplicateCount++; continue; }
+                const remainder = line.replace(dateMatch[0], '');
+                const numbers = remainder.match(/-?[\d,]+(\.\d+)?/g)?.map(n => parseVal(n)) || [];
+                if (numbers.length >= 4) {
+                    const p = { date, empAccum: numbers[0], empReturn: numbers[1], employerAccum: numbers[2], employerReturn: numbers[3], total: numbers[4] || (numbers[0] + numbers[1] + numbers[2] + numbers[3]), updatedAt: new Date().toISOString() };
+                    if (storageMode === 'cloud' && db && user) await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'fundEntries'), p);
+                    else { p.id = Date.now().toString() + Math.random().toString(36).substr(2, 5); fullData.push(p); }
+                    addedCount++; existingDates.add(date);
+                }
+            }
+            if (storageMode === 'local') saveLocalData();
+            syncDataState(); document.getElementById('paste-input').value = ""; window.togglePasteArea();
+            showAlert(addedCount > 0 ? `นำเข้าสำเร็จ ${addedCount} งวด` : `ไม่มีข้อมูลใหม่`);
+        };
+
+        const resetForm = () => { const form = document.getElementById('data-form'); if(form) form.reset(); const fid = document.getElementById('f-id'); if(fid) fid.value = ""; };
+
+        window.executeClearAll = async () => { 
+            window.closeConfirmModal(); showAlert("ล้างข้อมูลเรียบร้อย"); 
+            if (storageMode === 'cloud' && db && user) { for (const item of fullData) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'fundEntries', item.id)); } 
+            else { fullData = []; saveLocalData(); syncDataState(); } 
+        };
+
+        window.editEntry = id => {
+            const item = fullData.find(d => d.id === id); if (!item) return;
+            document.getElementById('f-id').value = item.id;
+            document.getElementById('f-date').value = item.date;
+            document.getElementById('f-empAccum').value = item.empAccum;
+            document.getElementById('f-empReturn').value = item.empReturn;
+            document.getElementById('f-employerAccum').value = item.employerAccum;
+            document.getElementById('f-employerReturn').value = item.employerReturn;
+            document.getElementById('form-title').innerText = "แก้ไขข้อมูล " + item.date;
+            document.getElementById('data-form').classList.remove('hidden');
+        };
+
+        window.deleteEntry = async id => { if (!confirm("ลบข้อมูลหรือไม่?")) return; if (storageMode === 'cloud' && db && user) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'fundEntries', id)); else { fullData = fullData.filter(d => d.id !== id); saveLocalData(); syncDataState(); } };
+
+        window.handleFileUpload = e => {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader(); 
+            showAlert("กำลังวิเคราะห์ไฟล์...");
+            reader.onload = async event => {
+                let rows = [];
+                try {
+                    if (file.name.endsWith('.csv')) {
+                        const buffer = event.target.result;
+                        let content = new TextDecoder('utf-8').decode(buffer);
+                        if (content.includes('\uFFFD') || content.includes('??')) content = new TextDecoder('windows-874').decode(buffer);
+                        const lines = content.split(/\r?\n/);
+                        lines.forEach((l) => {
+                            if (!l.trim()) return; 
+                            const cols = splitCSVLine(l); 
+                            if (cols.length >= 6 && isDatePattern(cols[0])) {
+                                rows.push({ date: formatFileDate(cols[0]), empAccum: parseVal(cols[1]), empReturn: parseVal(cols[2]), employerAccum: parseVal(cols[3]), employerReturn: parseVal(cols[4]), total: parseVal(cols[5]) });
+                            }
+                        });
+                    } else {
+                        const wb = XLSX.read(event.target.result, { type: 'binary', cellDates: true });
+                        const sheet = wb.Sheets[wb.SheetNames[0]];
+                        const dataJson = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                        dataJson.forEach((row) => {
+                            if (!row || !row.length) return;
+                            if (row.length >= 6 && isDatePattern(row[0])) {
+                                rows.push({ date: formatFileDate(row[0]), empAccum: parseVal(row[1]), empReturn: parseVal(row[2]), employerAccum: parseVal(row[3]), employerReturn: parseVal(row[4]), total: parseVal(row[5]) });
+                            }
+                        });
+                    }
+                    if (rows.length === 0) throw "ไม่พบข้อมูลที่ถูกต้องในไฟล์";
+                    const existingDates = new Set(fullData.map(d => d.date));
+                    let addedCount = 0;
+                    for (const p of rows) { 
+                        if (!existingDates.has(p.date)) { 
+                            p.updatedAt = new Date().toISOString(); 
+                            if (storageMode === 'cloud' && db && user) await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'fundEntries'), p);
+                            else { p.id = Date.now().toString() + Math.random().toString(36).substr(2, 5); fullData.push(p); } 
+                            addedCount++;
+                        }
+                    }
+                    if (storageMode === 'local') saveLocalData(); 
+                    syncDataState(); window.closeModal(); 
+                    showAlert(addedCount > 0 ? `นำเข้าสำเร็จ ${addedCount} งวด` : `ไม่มีข้อมูลใหม่`);
+                } catch (err) { showAlert("ล้มเหลว: " + err); }
+                e.target.value = ''; 
+            };
+            if (file.name.endsWith('.csv')) reader.readAsArrayBuffer(file); 
+            else reader.readAsBinaryString(file);
+        };
+
+        document.getElementById('data-form').onsubmit = async e => {
+            e.preventDefault(); const id = document.getElementById('f-id').value;
+            const p = { date: document.getElementById('f-date').value, empAccum: parseFloat(document.getElementById('f-empAccum').value || 0), empReturn: parseFloat(document.getElementById('f-empReturn').value || 0), employerAccum: parseFloat(document.getElementById('f-employerAccum').value || 0), employerReturn: parseFloat(document.getElementById('f-employerReturn').value || 0), updatedAt: new Date().toISOString() };
+            p.total = p.empAccum + p.empReturn + p.employerAccum + p.employerReturn;
+            if (storageMode === 'cloud' && db && user) { if (id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'fundEntries', id), p); else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'fundEntries'), p); } 
+            else { if (id) { const idx = fullData.findIndex(d => d.id === id); if (idx !== -1) { p.id = id; fullData[idx] = p; } } else { p.id = Date.now().toString(); fullData.push(p); } saveLocalData(); syncDataState(); }
+            window.toggleForm(); showAlert("บันทึกสำเร็จ");
+        };
+
+        const showAlert = (t) => { const el = document.getElementById('custom-alert'); const txt = document.getElementById('alert-text'); if(txt) txt.innerText = t; el.classList.remove('hidden'); setTimeout(() => el.classList.add('hidden'), 3000); };
+
+        const createStatCard = (t, v, s, i, c, p) => `
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-100 stat-card transition-all">
+                <div class="flex justify-between items-start mb-2.5"><div class="p-2 bg-${c}-50 text-${c}-600 rounded-lg"><i data-lucide="${i}" size="16"></i></div>${p !== undefined ? `<div class="text-[8px] font-black px-1.5 py-0.5 rounded-full ${p ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'} uppercase">${p ? 'Good' : 'Risk'}</div>` : ''}</div>
+                <p class="text-slate-400 text-[9px] font-black uppercase tracking-widest">${t}</p><h2 class="text-base font-black text-slate-900 mt-0.5">${v}</h2><p class="text-[9px] text-slate-400 mt-1 font-semibold italic opacity-70">${s}</p>
+            </div>`;
+
+        const renderHeatmap = data => {
+            const container = document.getElementById('heatmap-container'); if(!container) return;
+            const years = {}, months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            data.forEach((d, i) => {
+                const parts = d.date.split('.'), y = parts[2], m = parseInt(parts[1]) - 1;
+                if (!years[y]) years[y] = new Array(12).fill(null);
+                if (i > 0) { const cur = parseVal(d.total), pre = parseVal(data[i-1].total), difP = (parseVal(d.empAccum) + parseVal(d.employerAccum)) - (parseVal(data[i-1].empAccum) + parseVal(data[i-1].employerAccum)); years[y][m] = cur - pre - difP; }
+            });
+            let html = `<table class="w-full border-collapse text-[10px]"><thead><tr><th class="p-2.5 border text-left bg-slate-50 font-black">Year</th>`;
+            months.forEach(m => html += `<th class="p-2.5 border bg-slate-50 font-black">${m}</th>`);
+            html += `<th class="p-2.5 border bg-slate-50 font-black">Annual Profit</th></tr></thead><tbody>`;
+            Object.keys(years).sort().reverse().forEach(y => {
+                html += `<tr><td class="p-2.5 border font-bold bg-slate-50">${y}</td>`;
+                let yTot = 0;
+                years[y].forEach(val => {
+                    const intensity = val === null ? 0 : Math.min(0.8, Math.abs(val) / 25000);
+                    const style = val === null ? '' : `style="background-color: ${val >= 0 ? `rgba(16, 185, 129, ${intensity})` : `rgba(244, 63, 94, ${intensity})`}"`;
+                    html += `<td class="p-2.5 border text-center heatmap-cell" ${style} data-val="${val !== null ? formatCurrency(val) : 'N/A'}">${val !== null ? (val/1000).toFixed(1) + 'k' : '-'}</td>`;
+                    yTot += (val || 0);
+                });
+                html += `<td class="p-2.5 border font-bold text-right bg-slate-50 ${yTot >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${formatCurrency(yTot)}</td></tr>`;
+            });
+            container.innerHTML = html + `</tbody></table>`;
+        };
+
+        const renderYearly = () => {
+            const grid = document.getElementById('yearly-grid'); if(!grid) return;
+            const years = {};
+            fullData.forEach(d => { const y = d.date.split('.')[2]; if (!years[y]) years[y] = { f: d, l: d }; years[y].l = d; });
+            grid.innerHTML = Object.keys(years).sort().reverse().map(y => {
+                const diff = parseVal(years[y].l.total) - parseVal(years[y].f.total);
+                return `<div class="bg-white p-2.5 rounded-2xl border border-slate-200 text-center min-w-[95px] flex-shrink-0 shadow-sm">
+                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">${y}</p>
+                    <p class="text-[10px] font-black text-slate-800 mt-0.5">${formatCurrency(years[y].l.total).replace('฿','')}</p>
+                    <p class="text-[8px] ${diff >= 0 ? 'text-emerald-600' : 'text-rose-500'} font-bold mt-0.5">${diff >= 0 ? '▲' : '▼'}${formatCurrency(Math.abs(diff)).replace('฿','')}</p>
+                </div>`;
+            }).join('');
+        };
+
+        const updateCharts = (monthlyReturns) => {
+            if (filteredData.length === 0) return;
+            const labels = filteredData.map(d => d.date), principals = filteredData.map(d => parseVal(d.empAccum) + parseVal(d.employerAccum)), profits = filteredData.map(d => parseVal(d.empReturn) + parseVal(d.employerReturn));
+            const ctxG = document.getElementById('growthChart')?.getContext('2d');
+            if(ctxG) {
+                if (growthChart) growthChart.destroy();
+                growthChart = new Chart(ctxG, { type: 'line', data: { labels, datasets: [{ label: 'กำไร', data: profits, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.4)', fill: true, tension: 0.4, pointRadius: 0 }, { label: 'ต้นทุน', data: principals, borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.6)', fill: true, tension: 0.4, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { stacked: true, position: 'right', ticks: { font: { size: 9 }, callback: v => (v/1000).toFixed(0) + 'k' } } } } });
+            }
+            const ctxM = document.getElementById('monthlyPerfChart')?.getContext('2d');
+            if(ctxM) {
+                if (monthlyPerfChart) monthlyPerfChart.destroy();
+                const disp = monthlyReturns.slice(-filteredData.length);
+                monthlyPerfChart = new Chart(ctxM, { type: 'bar', data: { labels: labels.slice(1), datasets: [{ data: disp, backgroundColor: disp.map(v => v >= 0 ? '#10b98188' : '#f43f5e88'), borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { display: false } } } });
+            }
+            const ctxP = document.getElementById('pieChart')?.getContext('2d');
+            if(ctxP) {
+                if (pieChart) pieChart.destroy();
+                const l = filteredData[filteredData.length-1];
+                pieChart = new Chart(ctxP, { type: 'doughnut', data: { labels: ['พนักงาน', 'นายจ้าง'], datasets: [{ data: [parseVal(l.empAccum)+parseVal(l.empReturn), parseVal(l.employerAccum)+parseVal(l.employerReturn)], backgroundColor: ['#6366f1', '#f43f5e'], borderWidth: 2, borderColor: '#ffffff' }] }, options: { cutout: '70%', plugins: { legend: { display: false } } } });
+            }
+        };
+
+        const splitCSVLine = l => { 
+            const r = []; let c = '', q = false; 
+            for (let i = 0; i < l.length; i++) { 
+                if (l[i] === '"') q = !q; 
+                else if (l[i] === ',' && !q) { r.push(c); c = ''; } 
+                else c += l[i]; 
+            } 
+            r.push(c); return r.map(v => v.trim()); 
+        };
+
+        initApp(); lucide.createIcons();
+    </script>
+</body>
+</html>
